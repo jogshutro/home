@@ -5,12 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jogshutro: Let's coordinate!</title>
-    <!-- I found this color palette from some random website (altho tweaked it a little). The following are basically my styles since I couldn't get them to work in a separate file called style
-  css-->
-    <style> 
+    <!-- I found this color palette from some random website (altho tweaked it a little). The following are basically my styles since I couldn't get them to work in a separate file called style css-->
+    <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #E8F7DD; 
+            background-color: #E8F7DD;
             color: #151B1F;
             text-align: center;
             padding: 20px;
@@ -206,7 +205,7 @@
         }
 
         /* Contact Info Style */
-        #contact-info {       
+        #contact-info {
             bottom: 10px;
             right: 10px;
             font-size: 10px;
@@ -285,16 +284,16 @@
         let isMarking = false;
         let currentMarkers = [];
         let markerCount = 0;
-        const maxMarkers = 3; // Tinker with this number to control how many active projects one can have, can't have people spamming projects can I? :v
+        const maxMarkers = 3; 
         let userProjects = [];
         let activeChatroom = '';
         let lastMessageTime = 0;
         let markedLocation = null;
 
         function initMap() {
-            map = L.map('map').setView([23.8103, 90.4125], 13); // makes sure it loads with Bangladesh on the view, otherwise starts at London xD
+            map = L.map('map').setView([23.8103, 90.4125], 13); 
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {   // copy pasted from leaflet website
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {   
                 attribution: '© OpenStreetMap contributors'
             }).addTo(map);
 
@@ -305,13 +304,14 @@
                     alert("You must submit or delete your project before creating another one!");
                     return;
                 }
-                if (isMarking && markerCount < maxMarkers) {  // if current markings haven't exceeded the project limit already 
+                if (isMarking && markerCount < maxMarkers) {  
                     const projectName = prompt("Enter project name:");
                     if (!projectName) return;
 
+                    const projectId = db.collection("projects").doc().id; // Generating a unique ID for each project
                     document.getElementById('project-name').value = projectName;
                     const projectType = document.getElementById('project-type').value;
-                    const color = getProjectColor(projectType);  // gives color based on the type of project
+                    const color = getProjectColor(projectType);  
 
                     const marker = L.circleMarker(e.latlng, {
                         color: color,
@@ -320,26 +320,26 @@
                         .bindPopup(
                             `<div>Project: ${projectName}<br>Type: ${projectType}<br>Created by: ${auth.currentUser.displayName}<br>Date: ${new Date().toLocaleString()}</div>
                             <div class="marker-buttons">
-                                <button class="chatroom-btn" onclick="openChatroom('${projectName}')">Chatroom</button>
-                                <button class="delete-marker-btn" onclick="deleteMarker('${projectName}', this)">Delete</button>
+                                <button class="chatroom-btn" onclick="openChatroom('${projectId}')">Chatroom</button>
+                                <button class="delete-marker-btn" onclick="deleteMarker('${projectId}', this)">Delete</button>
                             </div>`)
                         .openPopup();
 
                     markedLocation = e.latlng;
-                    currentMarkers.push({ marker, projectName, projectType, location: e.latlng });
+                    currentMarkers.push({ marker, projectId, projectName, projectType, location: e.latlng });
                     markerCount++;
                     if (markerCount >= maxMarkers) {
                         isMarking = false;
                         document.getElementById('mark-area-button').textContent = 'Mark Area';
                     }
 
-                    createChatroom(projectName);
+                    createChatroom(projectId);  // Create chatroom with the unique ID
                 }
             });
         }
 
         function getProjectColor(type) {
-            switch (type) {  // switches between type, this part was A.I. generated
+            switch (type) {  
                 case 'cleanup':
                     return '#3aeb34';
                 case 'calligraphy':
@@ -355,7 +355,7 @@
             }
         }
 
-        auth.onAuthStateChanged(user => {  //style.display is used here to show buttons based on the user's login status
+        auth.onAuthStateChanged(user => { 
             if (user) {
                 document.getElementById('login-button').style.display = 'none';
                 document.getElementById('account-buttons').style.display = 'block';
@@ -447,7 +447,7 @@
             });
         }
 
-        function locateUser() { // funtion to zoom into the location of the user on the map. I think I copied it from some website
+        function locateUser() {
             map.locate({ setView: true, maxZoom: 16 });
 
             map.on('locationfound', (e) => {
@@ -462,21 +462,21 @@
             });
         }
 
-        async function createChatroom(projectName) {
-            const projectDoc = await db.collection("projects").doc(projectName).get();
-            if (!projectDoc.exists) { //looks for the ptoject details in database
+        async function createChatroom(projectId) {
+            const projectDoc = await db.collection("projects").doc(projectId).get();
+            if (!projectDoc.exists) {
                 alert("You should submit the project before messaging.");
                 return;
             }
 
-            const chatroomRef = rtdb.ref('chatrooms/' + projectName);
+            const chatroomRef = rtdb.ref('chatrooms/' + projectId);
             chatroomRef.set({
                 createdAt: firebase.database.ServerValue.TIMESTAMP
             });
         }
 
-        function openChatroom(projectName) {
-            activeChatroom = projectName;
+        function openChatroom(projectId) {
+            activeChatroom = projectId;
             document.getElementById('chatroom-container').style.display = 'block';
             loadChatMessages();
         }
@@ -530,7 +530,6 @@
                 sender: auth.currentUser.displayName,
                 senderId: auth.currentUser.uid,
                 text: messageText
-              // This is how the chats are stored in firebase real time database :3
             });
 
             messageInput.value = '';
@@ -547,7 +546,7 @@
                 if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
                     const projectType = data.type;
                     const color = getProjectColor(projectType);
-                    // tired of writing comments, losing patience.. ;_; I have this same piece of code in earlier lines, see from there
+
                     const marker = L.circleMarker([location.latitude, location.longitude], {
                         color: color,
                         radius: 8
@@ -555,7 +554,7 @@
                         .bindPopup(
                             `<div>Project: ${data.name}<br>Type: ${data.type}<br>Description: ${data.description}<br>Created by: ${data.userName}<br>Date: ${data.createdAt.toDate().toLocaleString()}</div>
                             <div class="marker-buttons">
-                                <button class="chatroom-btn" onclick="openChatroom('${data.name}')">Chatroom</button>
+                                <button class="chatroom-btn" onclick="openChatroom('${doc.id}')">Chatroom</button>
                                 ${auth.currentUser && auth.currentUser.uid === data.userId ? `<button class="delete-marker-btn" onclick="deleteMarker('${doc.id}', this)">Delete</button>` : ''}
                             </div>`)
                         .openPopup();
@@ -580,7 +579,7 @@
                     await db.collection("projects").doc(projectId).delete();
                     await rtdb.ref('chatrooms/' + projectId).remove();
                     alert('Project and associated chatroom deleted successfully!');
-                    location.reload();
+                    location.reload(); // Refreshes the entire page after deletion
                 } catch (error) {
                     console.error('Error deleting marker:', error);
                 }
@@ -611,7 +610,9 @@
                 return;
             }
 
-            await db.collection("projects").doc(projectName).set({
+            const projectId = db.collection("projects").doc().id; // Generate a unique ID for each project
+
+            await db.collection("projects").doc(projectId).set({
                 name: projectName,
                 type: projectType,
                 description: description,
@@ -630,7 +631,7 @@
             alert('Project submitted successfully!');
 
             loadUserProjects();
-            loadMarkersFromFirestore();
+            loadMarkersFromFirestore(); // Reload markers to show the new one
         });
 
         async function deleteProjects(userId) {
@@ -641,7 +642,7 @@
                 rtdb.ref('chatrooms/' + doc.id).remove();
             });
             await batch.commit();
-            location.reload();
+            location.reload(); // Refreshes the entire page after deletion
         }
 
         window.onload = initMap;
@@ -657,4 +658,4 @@
     </div>
 </body>
 
-</html>    
+</html>
