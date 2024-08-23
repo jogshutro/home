@@ -325,11 +325,27 @@
                 .then(data => earthquakeLayer.addData(data));
 
             const floodLayer = L.tileLayer.wms('https://floodmap.modaps.eosdis.nasa.gov/arcgis/services/NRT_Flood/MapServer/WMSServer', {
-                layers: 'Flood',
+                layers: '1',
                 format: 'image/png',
                 transparent: true,
                 attribution: 'Flood data from NASA Global Flood Monitoring System'
             }).addTo(map);
+
+            const floodGeoJsonUrl = 'https://floodmap.modaps.eosdis.nasa.gov/arcgis/services/NRT_Flood/MapServer/1/query?f=geojson&where=1=1';
+
+            fetch(floodGeoJsonUrl)
+                .then(response => response.json())
+                .then(data => {
+                    L.geoJSON(data, {
+                        style: function () {
+                            return { color: "#00008B", weight: 2, fillOpacity: 0.5 };
+                        },
+                        onEachFeature: function (feature, layer) {
+                            const time = new Date(feature.properties.Time).toLocaleString();
+                            layer.bindPopup(`<b>Flood Alert</b><br>Location: ${feature.properties.Location}<br>Time: ${time}`);
+                        }
+                    }).addTo(map);
+                });
 
             map.on('click', (e) => {
                 if (markerCount > 0) {
