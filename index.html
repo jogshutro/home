@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jogshutro: Let's coordinate!</title>
-    <!-- I found this color palette from some random website (altho tweaked it a little). The following are basically my styles since I couldn't get them to work in a separate file called style css-->
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -213,7 +213,6 @@
             text-align: center;
         }
     </style>
-    <!-- Initially codes for google api but then I realized that I needed a credit card to get google maps api so had to switch to leaflet +osm -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 </head>
 
@@ -237,6 +236,7 @@
     <form id="report-form">
         <input type="text" id="project-name" placeholder="Project Name" required>
         <select id="project-type" required>
+            <option value="disaster_response">Disaster Response</option>
             <option value="cleanup">Cleanup</option>
             <option value="calligraphy">Calligraphy</option>
             <option value="robbery_prevention">Robbery Prevention</option>
@@ -299,6 +299,16 @@
 
             loadMarkersFromFirestore();
 
+            // Add USGS Earthquake layer
+            const earthquakeLayer = L.tileLayer('https://earthquake.usgs.gov/arcgis/rest/services/eq/catalog_7day/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Earthquake data from USGS'
+            }).addTo(map);
+
+            // Add GFMS Flood layer
+            const floodLayer = L.tileLayer('https://floodservicemap.firebaseio.com/tile/{z}/{x}/{y}', {
+                attribution: 'Flood data from GFMS'
+            }).addTo(map);
+
             map.on('click', (e) => {
                 if (markerCount > 0) {
                     alert("You must submit or delete your project before creating another one!");
@@ -308,7 +318,7 @@
                     const projectName = prompt("Enter project name:");
                     if (!projectName) return;
 
-                    const projectId = db.collection("projects").doc().id; // Generating a unique ID for each project
+                    const projectId = db.collection("projects").doc().id; 
                     document.getElementById('project-name').value = projectName;
                     const projectType = document.getElementById('project-type').value;
                     const color = getProjectColor(projectType);  
@@ -333,13 +343,15 @@
                         document.getElementById('mark-area-button').textContent = 'Mark Area';
                     }
 
-                    createChatroom(projectId);  // Create chatroom with the unique ID
+                    createChatroom(projectId);  
                 }
             });
         }
 
         function getProjectColor(type) {
             switch (type) {  
+                case 'disaster_response':
+                    return '#df8142';
                 case 'cleanup':
                     return '#3aeb34';
                 case 'calligraphy':
@@ -650,7 +662,7 @@
 
     <!-- Watermark -->
     <!-- Ashfaqul Alam -->
-    <!-- Disclaimer: now I initially coded it in replit and since I figured I was going to host it on github pages, I thought it was essential to keep it as efficient as possible due to the limitations of free hosting. Hence, the code was partially inhanced using the A.I. tool that comes with replit for free-->
+    <!-- Disclaimer: now I initially coded it in replit and since I figured I was going to host it on github pages, I thought it was essential to keep it as efficient as possible due to the limitations of free hosting. Hence, the code was partially inhanced using the A.I. code auto completion/suggestion tool that comes with replit for free-->
 
     <!-- Creator Info -->
     <div id="contact-info">
