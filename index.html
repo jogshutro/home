@@ -267,312 +267,259 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyDAjjHIa2ZPqQ_Ybqp-uHbOleKwTV7AQAc",
-            authDomain: "lecor-f87a8.firebaseapp.com",
-            projectId: "lecor-f87a8",
-            storageBucket: "lecor-f87a8.appspot.com",
-            messagingSenderId: "606158282239",
-            appId: "1:606158282239:web:40537977bdf29e86059bca",
-            measurementId: "G-21F11LBMR6",
-            databaseURL: "https://lecor-f87a8-default-rtdb.asia-southeast1.firebasedatabase.app/"
-        };
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyDAjjHIa2ZPqQ_Ybqp-uHbOleKwTV7AQAc",
+        authDomain: "lecor-f87a8.firebaseapp.com",
+        projectId: "lecor-f87a8",
+        storageBucket: "lecor-f87a8.appspot.com",
+        messagingSenderId: "606158282239",
+        appId: "1:606158282239:web:40537977bdf29e86059bca",
+        measurementId: "G-21F11LBMR6",
+        databaseURL: "https://lecor-f87a8-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    };
 
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        const rtdb = firebase.database();
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const rtdb = firebase.database();
 
-        let map;
-        let isMarking = false;
-        let currentMarkers = [];
-        let markerCount = 0;
-        const maxMarkers = 3;
-        let userProjects = [];
-        let activeChatroom = '';
-        let lastMessageTime = 0;
-        let markedLocation = null;
+    let map;
+    let isMarking = false;
+    let currentMarkers = [];
+    let markerCount = 0;
+    const maxMarkers = 3;
+    let userProjects = [];
+    let activeChatroom = '';
+    let lastMessageTime = 0;
+    let markedLocation = null;
 
-        function initMap() {
-            map = L.map('map').setView([23.8103, 90.4125], 13);
+    function initMap() {
+        map = L.map('map').setView([23.8103, 90.4125], 13);
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
 
-            loadMarkersFromFirestore();
+        loadMarkersFromFirestore();
 
-            const earthquakeLayer = L.geoJSON(null, {
-                pointToLayer: function (feature, latlng) {
-                    return L.circleMarker(latlng, {
-                        radius: 8,
-                        fillColor: "#ff0000",
-                        color: "#ff0000",
-                        weight: 1,
-                        opacity: 1,
-                        fillOpacity: 0.8
-                    });
-                },
-                onEachFeature: function (feature, layer) {
-                    const time = new Date(feature.properties.time).toLocaleString();
-                    layer.bindPopup(`<b>Earthquake</b><br>Magnitude: ${feature.properties.mag}<br>Location: ${feature.properties.place}<br>Time: ${time}`);
-                }
-            }).addTo(map);
+        // Adding Flood Layer using WMS
+        const floodLayer = L.tileLayer.wms('https://floodmap.modaps.eosdis.nasa.gov/arcgis/services/NRT_Flood/MapServer/WMSServer', {
+            layers: '1',
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.2,
+            attribution: 'Flood data from NASA Global Flood Monitoring System'
+        }).addTo(map);
 
-            fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson')
-                .then(response => response.json())
-                .then(data => earthquakeLayer.addData(data));
+        // Fetching Flood GeoJSON Data
+        const floodGeoJsonUrl = 'https://floodmap.modaps.eosdis.nasa.gov/arcgis/services/NRT_Flood/MapServer/1/query?f=geojson&where=1=1';
 
-            const floodLayer = L.tileLayer.wms('https://floodmap.modaps.eosdis.nasa.gov/arcgis/services/NRT_Flood/MapServer/WMSServer', {
-                layers: '1',
-                format: 'image/png',
-                transparent: true,
-                attribution: 'Flood data from NASA Global Flood Monitoring System'
-            }).addTo(map);
-
-            const floodGeoJsonUrl = 'https://floodmap.modaps.eosdis.nasa.gov/arcgis/services/NRT_Flood/MapServer/1/query?f=geojson&where=1=1';
-
-            fetch(floodGeoJsonUrl)
-                .then(response => response.json())
-                .then(data => {
-                    L.geoJSON(data, {
-                        style: function () {
-                            return { color: "#00008B", weight: 2, fillOpacity: 0.5 };
-                        },
-                        onEachFeature: function (feature, layer) {
-                            const time = new Date(feature.properties.Time).toLocaleString();
-                            layer.bindPopup(`<b>Flood Alert</b><br>Location: ${feature.properties.Location}<br>Time: ${time}`);
-                        }
-                    }).addTo(map);
-                });
-
-            map.on('click', (e) => {
-                if (markerCount > 0) {
-                    alert("You must submit or delete your project before creating another one!");
-                    return;
-                }
-                if (isMarking && markerCount < maxMarkers) {
-                    const projectName = prompt("Enter project name:");
-                    if (!projectName) return;
-
-                    const projectId = db.collection("projects").doc().id;
-                    document.getElementById('project-name').value = projectName;
-                    const projectType = document.getElementById('project-type').value;
-                    const color = getProjectColor(projectType);
-
-                    const marker = L.circleMarker(e.latlng, {
-                        color: color,
-                        radius: 8
-                    }).addTo(map)
-                        .bindPopup(
-                            `<div>Project: ${projectName}<br>Type: ${projectType}<br>Created by: ${auth.currentUser.displayName}<br>Date: ${new Date().toLocaleString()}</div>
-                            <div class="marker-buttons">
-                                <button class="chatroom-btn" onclick="openChatroom('${projectId}')">Chatroom</button>
-                                <button class="delete-marker-btn" onclick="deleteMarker('${projectId}', this)">Delete</button>
-                            </div>`)
-                        .openPopup();
-
-                    markedLocation = e.latlng;
-                    currentMarkers.push({ marker, projectId, projectName, projectType, location: e.latlng });
-                    markerCount++;
-                    if (markerCount >= maxMarkers) {
-                        isMarking = false;
-                        document.getElementById('mark-area-button').textContent = 'Mark Area';
+        fetch(floodGeoJsonUrl)
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: function () {
+                        return { color: "#00008B", weight: 2, fillOpacity: 0.2 };
+                    },
+                    onEachFeature: function (feature, layer) {
+                        const time = new Date(feature.properties.Time).toLocaleString();
+                        const location = feature.properties.Location || 'Unknown';
+                        layer.bindPopup(`<b>Flood Alert</b><br>Location: ${location}<br>Time: ${time}`);
                     }
-
-                    createChatroom(projectId);
-                }
+                }).addTo(map);
             });
 
-            floodLayer.on('click', function(e) {
-                const latlng = e.latlng;
-                L.popup()
-                    .setLatLng(latlng)
-                    .setContent("Flood detected at this location")
-                    .openOn(map);
-            });
-        }
-
-        function getProjectColor(type) {
-            switch (type) {
-                case 'disaster_response':
-                    return '#df8142';
-                case 'cleanup':
-                    return '#3aeb34';
-                case 'calligraphy':
-                    return '#349beb';
-                case 'robbery_prevention':
-                    return '#ff0000';
-                case 'extortion_prevention':
-                    return '#ffff00';
-                case 'tree_plantation':
-                    return '#006400';
-                case 'other':
-                    return '#9063eb';
-                default:
-                    return '#000000';
-            }
-        }
-
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                document.getElementById('login-button').style.display = 'none';
-                document.getElementById('account-buttons').style.display = 'block';
-                document.getElementById('project-list').style.display = 'block';
-
-                loadUserProjects();
-
-                document.getElementById('logout-button').addEventListener('click', () => {
-                    auth.signOut().then(() => location.reload());
-                });
-
-                document.getElementById('delete-account-button').addEventListener('click', async () => {
-                    if (confirm('Do you really want to delete your account? All of your active projects will also be removed.')) {
-                        try {
-                            await deleteProjects(user.uid);
-                            await user.delete();
-                            alert('Account and associated projects deleted successfully.');
-                            location.reload();
-                        } catch (error) {
-                            if (error.code === 'auth/requires-recent-login') {
-                                alert('This operation requires recent authentication. Logout and login again before trying to delete your account.');
-                            } else {
-                                console.error('Error deleting account:', error);
-                            }
-                        }
-                    }
-                });
-
-                document.getElementById('chatroom-input').disabled = false;
-                document.getElementById('chatroom-send').disabled = false;
-            } else {
-                document.getElementById('login-button').style.display = 'block';
-                document.getElementById('account-buttons').style.display = 'none';
-                document.getElementById('project-list').style.display = 'none';
-
-                document.getElementById('chatroom-input').disabled = true;
-                document.getElementById('chatroom-send').disabled = true;
-            }
-        });
-
-        document.getElementById('login-button').addEventListener('click', () => {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider).catch(error => {
-                console.error('Error during login:', error);
-            });
-        });
-
-        document.getElementById('locate-button').addEventListener('click', locateUser);
-
-        document.getElementById('mark-area-button').addEventListener('click', () => {
-            if (!auth.currentUser) {
-                alert('You must be logged in to perform this action.');
+        map.on('click', (e) => {
+            if (markerCount > 0) {
+                alert("You must submit or delete your project before creating another one!");
                 return;
             }
-            isMarking = !isMarking;
-            document.getElementById('mark-area-button').textContent = isMarking ? 'Stop Marking' : 'Mark Area';
-        });
+            if (isMarking && markerCount < maxMarkers) {
+                const projectName = prompt("Enter project name:");
+                if (!projectName) return;
 
-        async function loadUserProjects() {
-            const user = auth.currentUser;
-            if (!user) return;
+                const projectId = db.collection("projects").doc().id;
+                document.getElementById('project-name').value = projectName;
+                const projectType = document.getElementById('project-type').value;
+                const color = getProjectColor(projectType);
 
-            const snapshot = await db.collection("projects").where("userId", "==", user.uid).get();
-            userProjects = [];
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                userProjects.push({ id: doc.id, name: data.name, location: data.location, type: data.type });
-            });
-
-            populateUserProjectsDropdown();
-        }
-
-        function populateUserProjectsDropdown() {
-            const dropdown = document.getElementById('user-projects');
-            dropdown.innerHTML = '<option value="">Select your project</option>';
-            userProjects.forEach(project => {
-                const option = document.createElement('option');
-                option.value = project.id;
-                option.textContent = project.name;
-                dropdown.appendChild(option);
-            });
-
-            dropdown.addEventListener('change', () => {
-                const projectId = dropdown.value;
-                if (projectId) {
-                    const project = userProjects.find(p => p.id === projectId);
-                    map.setView([project.location.latitude, project.location.longitude], 16);
-                }
-            });
-        }
-
-        function locateUser() {
-            map.locate({ setView: true, maxZoom: 16 });
-
-            map.on('locationfound', (e) => {
-                L.marker(e.latlng).addTo(map)
-                    .bindPopup('You are here!')
+                const marker = L.circleMarker(e.latlng, {
+                    color: color,
+                    radius: 8
+                }).addTo(map)
+                    .bindPopup(
+                        `<div>Project: ${projectName}<br>Type: ${projectType}<br>Created by: ${auth.currentUser.displayName}<br>Date: ${new Date().toLocaleString()}</div>
+                        <div class="marker-buttons">
+                            <button class="chatroom-btn" onclick="openChatroom('${projectId}')">Chatroom</button>
+                            <button class="delete-marker-btn" onclick="deleteMarker('${projectId}', this)">Delete</button>
+                        </div>`)
                     .openPopup();
-                map.setView(e.latlng, 16);
-            });
 
-            map.on('locationerror', () => {
-                alert('Could not get your location.');
-            });
-        }
+                markedLocation = e.latlng;
+                currentMarkers.push({ marker, projectId, projectName, projectType, location: e.latlng });
+                markerCount++;
+                if (markerCount >= maxMarkers) {
+                    isMarking = false;
+                    document.getElementById('mark-area-button').textContent = 'Mark Area';
+                }
 
-        async function createChatroom(projectId) {
-            const projectDoc = await db.collection("projects").doc(projectId).get();
-            if (!projectDoc.exists) {
-                alert("You should submit the project before messaging.");
-                return;
+                createChatroom(projectId);
             }
-
-            const chatroomRef = rtdb.ref('chatrooms/' + projectId);
-            chatroomRef.set({
-                createdAt: firebase.database.ServerValue.TIMESTAMP
-            });
-        }
-
-        function openChatroom(projectId) {
-            activeChatroom = projectId;
-            document.getElementById('chatroom-container').style.display = 'block';
-            loadChatMessages();
-        }
-
-        document.getElementById('close-chatroom').addEventListener('click', () => {
-            document.getElementById('chatroom-container').style.display = 'none';
         });
 
-        function loadChatMessages() {
-            const chatroomRef = rtdb.ref('chatrooms/' + activeChatroom + '/messages');
-            chatroomRef.on('value', async (snapshot) => {
-                const projectDoc = await db.collection("projects").doc(activeChatroom).get();
-                if (!projectDoc.exists) {
-                    alert("This project doesn't exist anymore/ will exist after it's submitted.");
-                    document.getElementById('chatroom-container').style.display = 'none';
-                    return;
-                }
+        map.on('locationfound', (e) => {
+            L.marker(e.latlng).addTo(map)
+                .bindPopup('You are here!')
+                .openPopup();
+            map.setView(e.latlng, 16);
+        });
 
-                const messages = snapshot.val();
-                const chatroomMessages = document.getElementById('chatroom-messages');
-                chatroomMessages.innerHTML = '';
-                for (let id in messages) {
-                    const message = messages[id];
-                    const messageDiv = document.createElement('div');
-                    messageDiv.classList.add('chat-bubble');
-                    messageDiv.classList.add(message.senderId === auth.currentUser.uid ? 'right' : 'left');
-                    messageDiv.textContent = `${message.sender}: ${message.text}`;
-                    chatroomMessages.appendChild(messageDiv);
+        map.on('locationerror', () => {
+            alert('Could not get your location.');
+        });
+    }
+
+    function getProjectColor(type) {
+        switch (type) {
+            case 'disaster_response':
+                return '#df8142';
+            case 'cleanup':
+                return '#3aeb34';
+            case 'calligraphy':
+                return '#349beb';
+            case 'robbery_prevention':
+                return '#ff0000';
+            case 'extortion_prevention':
+                return '#ffff00';
+            case 'tree_plantation':
+                return '#006400';
+            case 'other':
+                return '#9063eb';
+            default:
+                return '#000000';
+        }
+    }
+
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            document.getElementById('login-button').style.display = 'none';
+            document.getElementById('account-buttons').style.display = 'block';
+            document.getElementById('project-list').style.display = 'block';
+
+            loadUserProjects();
+
+            document.getElementById('logout-button').addEventListener('click', () => {
+                auth.signOut().then(() => location.reload());
+            });
+
+            document.getElementById('delete-account-button').addEventListener('click', async () => {
+                if (confirm('Do you really want to delete your account? All of your active projects will also be removed.')) {
+                    try {
+                        await deleteProjects(user.uid);
+                        await user.delete();
+                        alert('Account and associated projects deleted successfully.');
+                        location.reload();
+                    } catch (error) {
+                        if (error.code === 'auth/requires-recent-login') {
+                            alert('This operation requires recent authentication. Logout and login again before trying to delete your account.');
+                        } else {
+                            console.error('Error deleting account:', error);
+                        }
+                    }
                 }
             });
+
+            document.getElementById('chatroom-input').disabled = false;
+            document.getElementById('chatroom-send').disabled = false;
+        } else {
+            document.getElementById('login-button').style.display = 'block';
+            document.getElementById('account-buttons').style.display = 'none';
+            document.getElementById('project-list').style.display = 'none';
+
+            document.getElementById('chatroom-input').disabled = true;
+            document.getElementById('chatroom-send').disabled = true;
+        }
+    });
+
+    document.getElementById('login-button').addEventListener('click', () => {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        auth.signInWithPopup(provider).catch(error => {
+            console.error('Error during login:', error);
+        });
+    });
+
+    document.getElementById('locate-button').addEventListener('click', () => {
+        map.locate({ setView: true, maxZoom: 16 });
+    });
+
+    document.getElementById('mark-area-button').addEventListener('click', () => {
+        if (!auth.currentUser) {
+            alert('You must be logged in to perform this action.');
+            return;
+        }
+        isMarking = !isMarking;
+        document.getElementById('mark-area-button').textContent = isMarking ? 'Stop Marking' : 'Mark Area';
+    });
+
+    async function loadUserProjects() {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const snapshot = await db.collection("projects").where("userId", "==", user.uid).get();
+        userProjects = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            userProjects.push({ id: doc.id, name: data.name, location: data.location, type: data.type });
+        });
+
+        populateUserProjectsDropdown();
+    }
+
+    function populateUserProjectsDropdown() {
+        const dropdown = document.getElementById('user-projects');
+        dropdown.innerHTML = '<option value="">Select your project</option>';
+        userProjects.forEach(project => {
+            const option = document.createElement('option');
+            option.value = project.id;
+            option.textContent = project.name;
+            dropdown.appendChild(option);
+        });
+
+        dropdown.addEventListener('change', () => {
+            const projectId = dropdown.value;
+            if (projectId) {
+                const project = userProjects.find(p => p.id === projectId);
+                map.setView([project.location.latitude, project.location.longitude], 16);
+            }
+        });
+    }
+
+    async function createChatroom(projectId) {
+        const projectDoc = await db.collection("projects").doc(projectId).get();
+        if (!projectDoc.exists) {
+            alert("You should submit the project before messaging.");
+            return;
         }
 
-        document.getElementById('chatroom-send').addEventListener('click', async () => {
-            const currentTime = Date.now();
-            if (currentTime - lastMessageTime < 1300) return;
+        const chatroomRef = rtdb.ref('chatrooms/' + projectId);
+        chatroomRef.set({
+            createdAt: firebase.database.ServerValue.TIMESTAMP });
+    }
 
+    function openChatroom(projectId) {
+        activeChatroom = projectId;
+        document.getElementById('chatroom-container').style.display = 'block';
+        loadChatMessages();
+    }
+
+    document.getElementById('close-chatroom').addEventListener('click', () => {
+        document.getElementById('chatroom-container').style.display = 'none';
+    });
+
+    function loadChatMessages() {
+        const chatroomRef = rtdb.ref('chatrooms/' + activeChatroom + '/messages');
+        chatroomRef.on('value', async (snapshot) => {
             const projectDoc = await db.collection("projects").doc(activeChatroom).get();
             if (!projectDoc.exists) {
                 alert("This project doesn't exist anymore/ will exist after it's submitted.");
@@ -580,137 +527,161 @@
                 return;
             }
 
-            const messageInput = document.getElementById('chatroom-input');
-            const messageText = messageInput.value;
-            if (messageText.trim() === '') return;
+            const messages = snapshot.val();
+            const chatroomMessages = document.getElementById('chatroom-messages');
+            chatroomMessages.innerHTML = '';
+            for (let id in messages) {
+                const message = messages[id];
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('chat-bubble');
+                messageDiv.classList.add(message.senderId === auth.currentUser.uid ? 'right' : 'left');
+                messageDiv.textContent = `${message.sender}: ${message.text}`;
+                chatroomMessages.appendChild(messageDiv);
+            }
+        });
+    }
 
-            const chatroomRef = rtdb.ref('chatrooms/' + activeChatroom + '/messages');
-            const newMessageRef = chatroomRef.push();
-            newMessageRef.set({
-                sender: auth.currentUser.displayName,
-                senderId: auth.currentUser.uid,
-                text: messageText
-            });
+    document.getElementById('chatroom-send').addEventListener('click', async () => {
+        const currentTime = Date.now();
+        if (currentTime - lastMessageTime < 1300) return;
 
-            messageInput.value = '';
-            lastMessageTime = currentTime;
+        const projectDoc = await db.collection("projects").doc(activeChatroom).get();
+        if (!projectDoc.exists) {
+            alert("This project doesn't exist anymore/ will exist after it's submitted.");
+            document.getElementById('chatroom-container').style.display = 'none';
+            return;
+        }
+
+        const messageInput = document.getElementById('chatroom-input');
+        const messageText = messageInput.value;
+        if (messageText.trim() === '') return;
+
+        const chatroomRef = rtdb.ref('chatrooms/' + activeChatroom + '/messages');
+        const newMessageRef = chatroomRef.push();
+        newMessageRef.set({
+            sender: auth.currentUser.displayName,
+            senderId: auth.currentUser.uid,
+            text: messageText
         });
 
-        async function loadMarkersFromFirestore() {
-            const snapshot = await db.collection("projects").get();
-            clearAllMarkers();
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                const location = data.location;
+        messageInput.value = '';
+        lastMessageTime = currentTime;
+    });
 
-                if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
-                    const projectType = data.type;
-                    const color = getProjectColor(projectType);
+    async function loadMarkersFromFirestore() {
+        const snapshot = await db.collection("projects").get();
+        clearAllMarkers();
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const location = data.location;
 
-                    const marker = L.circleMarker([location.latitude, location.longitude], {
-                        color: color,
-                        radius: 8
-                    }).addTo(map)
-                        .bindPopup(
-                            `<div>Project: ${data.name}<br>Type: ${data.type}<br>Description: ${data.description}<br>Created by: ${data.userName}<br>Date: ${data.createdAt.toDate().toLocaleString()}</div>
-                            <div class="marker-buttons">
-                                <button class="chatroom-btn" onclick="openChatroom('${doc.id}')">Chatroom</button>
-                                ${auth.currentUser && auth.currentUser.uid === data.userId ? `<button class="delete-marker-btn" onclick="deleteMarker('${doc.id}', this)">Delete</button>` : ''}
-                            </div>`)
-                        .openPopup();
+            if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
+                const projectType = data.type;
+                const color = getProjectColor(projectType);
 
-                    currentMarkers.push(marker);
-                } else {
-                    console.error('Invalid location data:', location);
-                }
-            });
-        }
+                const marker = L.circleMarker([location.latitude, location.longitude], {
+                    color: color,
+                    radius: 8
+                }).addTo(map)
+                    .bindPopup(
+                        `<div>Project: ${data.name}<br>Type: ${data.type}<br>Description: ${data.description}<br>Created by: ${data.userName}<br>Date: ${data.createdAt.toDate().toLocaleString()}</div>
+                        <div class="marker-buttons">
+                            <button class="chatroom-btn" onclick="openChatroom('${doc.id}')">Chatroom</button>
+                            ${auth.currentUser && auth.currentUser.uid === data.userId ? `<button class="delete-marker-btn" onclick="deleteMarker('${doc.id}', this)">Delete</button>` : ''}
+                        </div>`)
+                    .openPopup();
 
-        function clearAllMarkers() {
-            currentMarkers.forEach(marker => {
-                map.removeLayer(marker);
-            });
-            currentMarkers = [];
-        }
+                currentMarkers.push(marker);
+            } else {
+                console.error('Invalid location data:', location);
+            }
+        });
+    }
 
-        async function deleteMarker(projectId, button) {
-            if (confirm('Are you sure you want to delete your project?')) {
-                try {
-                    await db.collection("projects").doc(projectId).delete();
-                    await rtdb.ref('chatrooms/' + projectId).remove();
-                    alert('Project and associated chatroom deleted successfully!');
-                    location.reload();
-                } catch (error) {
-                    console.error('Error deleting marker:', error);
-                }
+    function clearAllMarkers() {
+        currentMarkers.forEach(marker => {
+            map.removeLayer(marker);
+        });
+        currentMarkers = [];
+    }
+
+    async function deleteMarker(projectId, button) {
+        if (confirm('Are you sure you want to delete your project?')) {
+            try {
+                await db.collection("projects").doc(projectId).delete();
+                await rtdb.ref('chatrooms/' + projectId).remove();
+                alert('Project and associated chatroom deleted successfully!');
+                location.reload();
+            } catch (error) {
+                console.error('Error deleting marker:', error);
             }
         }
+    }
 
-        document.getElementById('report-form').addEventListener('submit', async function (e) {
-            e.preventDefault();
+    document.getElementById('report-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
 
-            if (!auth.currentUser) {
-                alert('You must be logged in to perform this action.');
-                return;
-            }
+        if (!auth.currentUser) {
+            alert('You must be logged in to perform this action.');
+            return;
+        }
 
-            const projectName = document.getElementById('project-name').value;
-            const projectType = document.getElementById('project-type').value;
-            const description = document.getElementById('description').value;
-            const location = markedLocation;
+        const projectName = document.getElementById('project-name').value;
+        const projectType = document.getElementById('project-type').value;
+        const description = document.getElementById('description').value;
+        const location = markedLocation;
 
-            if (!location) {
-                alert('Please mark a location on the map.');
-                return;
-            }
+        if (!location) {
+            alert('Please mark a location on the map.');
+            return;
+        }
 
-            const userProjectsSnapshot = await db.collection("projects").where("userId", "==", auth.currentUser.uid).get();
-            if (userProjectsSnapshot.size >= maxMarkers) {
-                alert('You can only have 3 active projects');
-                return;
-            }
+        const userProjectsSnapshot = await db.collection("projects").where("userId", "==", auth.currentUser.uid).get();
+        if (userProjectsSnapshot.size >= maxMarkers) {
+            alert('You can only have 3 active projects');
+            return;
+        }
 
-            const projectId = db.collection("projects").doc().id;
+        const projectId = db.collection("projects").doc().id;
 
-            await db.collection("projects").doc(projectId).set({
-                name: projectName,
-                type: projectType,
-                description: description,
-                location: new firebase.firestore.GeoPoint(location.lat, location.lng),
-                userId: auth.currentUser.uid,
-                userName: auth.currentUser.displayName,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                userEmail: auth.currentUser.email
-            });
-
-            currentMarkers = [];
-            markerCount = 0;
-            markedLocation = null;
-            isMarking = false;
-            document.getElementById('mark-area-button').textContent = 'Mark Area';
-            alert('Project submitted successfully!');
-
-            loadUserProjects();
-            loadMarkersFromFirestore();
+        await db.collection("projects").doc(projectId).set({
+            name: projectName,
+            type: projectType,
+            description: description,
+            location: new firebase.firestore.GeoPoint(location.lat, location.lng),
+            userId: auth.currentUser.uid,
+            userName: auth.currentUser.displayName,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            userEmail: auth.currentUser.email
         });
 
-        async function deleteProjects(userId) {
-            const projectsSnapshot = await db.collection("projects").where("userId", "==", userId).get();
-            const batch = db.batch();
-            projectsSnapshot.forEach(doc => {
-                batch.delete(doc.ref);
-                rtdb.ref('chatrooms/' + doc.id).remove();
-            });
-            await batch.commit();
-            location.reload();
-        }
+        currentMarkers = [];
+        markerCount = 0;
+        markedLocation = null;
+        isMarking = false;
+        document.getElementById('mark-area-button').textContent = 'Mark Area';
+        alert('Project submitted successfully!');
 
-        window.onload = initMap;
-    </script>
+        loadUserProjects();
+        loadMarkersFromFirestore();
+    });
 
-    <div id="contact-info">
-        This website was created by <a href="https://www.facebook.com/profile.php?id=100016903667257&mibextid=ZbWKwL">Ashfaqul Alam</a> to serve our broader social interest | Email: kittlerthebittler@gmail.com
-    </div>
+    async function deleteProjects(userId) {
+        const projectsSnapshot = await db.collection("projects").where("userId", "==", userId).get();
+        const batch = db.batch();
+        projectsSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+            rtdb.ref('chatrooms/' + doc.id).remove();
+        });
+        await batch.commit();
+        location.reload();
+    }
+
+    window.onload = initMap;
+</script>
+
+<div id="contact-info">
+    This website was created by <a href="https://www.facebook.com/profile.php?id=100016903667257&mibextid=ZbWKwL">Ashfaqul Alam</a> to serve our broader social interest | Email: kittlerthebittler@gmail.com
+</div>
 </body>
-
 </html>
