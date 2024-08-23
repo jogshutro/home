@@ -303,29 +303,69 @@
 
             loadMarkersFromFirestore();
 
-            const disasterLayer = L.tileLayer.wms('https://geoserver.gdacs.org/geoserver/GDACS/wms', {
-                layers: 'gdacs:gdacs_alerts',
-                format: 'image/png',
-                transparent: true,
-                attribution: 'Global Disaster Alert and Coordination System (GDACS)'
+            const earthquakeLayer = L.geoJSON(null, {
+                pointToLayer: function (feature, latlng) {
+                    return L.circleMarker(latlng, {
+                        radius: 8,
+                        fillColor: "#ff0000",
+                        color: "#ff0000",
+                        weight: 1,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    });
+                },
+                onEachFeature: function (feature, layer) {
+                    const time = new Date(feature.properties.time).toLocaleString();
+                    layer.bindPopup(`<b>Earthquake</b><br>Magnitude: ${feature.properties.mag}<br>Location: ${feature.properties.place}<br>Time: ${time}`);
+                }
             }).addTo(map);
 
-            fetch('https://geoserver.gdacs.org/geoserver/gdacs/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=gdacs:gdacs_alerts&outputFormat=application/json')
+            fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson')
+                .then(response => response.json())
+                .then(data => earthquakeLayer.addData(data));
+
+            // Flood Layer (Global Disaster Alert Coordination System - GDACS)
+            const floodLayer = L.tileLayer.wms('https://gdacs.org/gdacs/Service/gdacs-situation-services?service=WMS&request=GetMap', {
+                layers: 'Floods',
+                format: 'image/png',
+                transparent: true,
+                attribution: 'Flood data from GDACS'
+            }).addTo(map);
+
+            const floodGeoJsonUrl = 'https://www.gdacs.org/gdacs-situation-services?service=WFS&version=1.0.0&request=GetFeature&typeName=gdacs:os:hydro:report&outputFormat=application/json';
+
+            fetch(floodGeoJsonUrl)
                 .then(response => response.json())
                 .then(data => {
                     L.geoJSON(data, {
+                        style: function (feature) {
+                            return {
+                                color: "#00008B",
+                                weight: 2,
+                                fillOpacity: 0.5
+                            };
+                        },
                         onEachFeature: function (feature, layer) {
-                            const { title, country, type, severity, deaths } = feature.properties;
-                            layer.bindPopup(
-                                `<b>${title}</b><br>Type: ${type}<br>Country: ${country}<br>Severity: ${severity}<br>Deaths: ${deaths}`
-                            );
+                            const { Location, Deaths } = feature.properties;
+                            const time = new Date(feature.properties.Time).toLocaleString();
+                            layer.bindPopup(`<b>Flood Alert</b><br>Location: ${Location}<br>Deaths: ${Deaths}<br>Time: ${time}`);
                         }
                     }).addTo(map);
                 });
 
-            const layersControl = L.control.layers(null, {
-                "Disaster Layer": disasterLayer
-            }).addTo(map);
+            // Layer Control
+            const baseLayers = {
+                "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                })
+            };
+
+            const overlayLayers = {
+                "Earthquakes": earthquakeLayer,
+                "Floods": floodLayer
+            };
+
+            L.control.layers(baseLayers, overlayLayers).addTo(map);
 
             map.on('click', (e) => {
                 if (markerCount > 0) {
@@ -363,6 +403,14 @@
 
                     createChatroom(projectId);
                 }
+            });
+
+            floodLayer.on('click', function(e) {
+                const latlng = e.latlng;
+                L.popup()
+                    .setLatLng(latlng)
+                    .setContent("Flood detected at this location")
+                    .openOn(map);
             });
         }
 
@@ -522,7 +570,7 @@
             chatroomRef.on('value', async (snapshot) => {
                 const projectDoc = await db.collection("projects").doc(activeChatroom).get();
                 if (!projectDoc.exists) {
-                    alert("This project doesn't exist anymore or will exist after it's submitted.");
+                    alert("This project doesn't exist anymore/ will exist after it's submitted.");
                     document.getElementById('chatroom-container').style.display = 'none';
                     return;
                 }
@@ -547,7 +595,7 @@
 
             const projectDoc = await db.collection("projects").doc(activeChatroom).get();
             if (!projectDoc.exists) {
-                alert("This project doesn't exist anymore or will exist after it's submitted.");
+                alert("This project doesn't exist anymore/ will exist after it's submitted.");
                 document.getElementById('chatroom-container').style.display = 'none';
                 return;
             }
