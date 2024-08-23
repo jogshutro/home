@@ -333,19 +333,17 @@
 
             const floodGeoJsonUrl = 'https://floodmap.modaps.eosdis.nasa.gov/arcgis/services/NRT_Flood/MapServer/1/query?f=geojson&where=1=1';
 
-            fetch(floodGeoJsonUrl)
-                .then(response => response.json())
-                .then(data => {
-                    L.geoJSON(data, {
-                        style: function () {
-                            return { color: "#00008B", weight: 2, fillOpacity: 0.5 };
-                        },
-                        onEachFeature: function (feature, layer) {
-                            const time = new Date(feature.properties.Time).toLocaleString();
-                            layer.bindPopup(`<b>Flood Alert</b><br>Location: ${feature.properties.Location}<br>Time: ${time}`);
-                        }
-                    }).addTo(map);
-                });
+           fetch(floodGeoJsonUrl)
+           .then(response => response.json())
+           .then(data => {
+           L.geoJSON(data, {
+           style: { color: "#00008B", weight: 2, fillOpacity: 0.5 },
+            onEachFeature: function (feature, layer) {
+                const time = new Date(feature.properties.Time).toLocaleString();
+                layer.bindPopup(`<b>Flood Alert</b><br>Location: ${feature.properties.Location}<br>Time: ${time}`);
+                 }
+           }).addTo(map);
+        });
 
             map.on('click', (e) => {
                 if (markerCount > 0) {
@@ -386,11 +384,11 @@
             });
 
             floodLayer.on('click', function(e) {
-                const latlng = e.latlng;
-                L.popup()
-                    .setLatLng(latlng)
-                    .setContent("Flood detected at this location")
-                    .openOn(map);
+    const latlng = e.latlng;
+    L.popup()
+        .setLatLng(latlng)
+        .setContent("Flood detected at this location")
+        .openOn(map);
             });
         }
 
