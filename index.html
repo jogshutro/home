@@ -304,8 +304,19 @@
             loadMarkersFromFirestore();
 
             const earthquakeLayer = L.geoJSON(null, {
+                pointToLayer: function (feature, latlng) {
+                    return L.circleMarker(latlng, {
+                        radius: 8,
+                        fillColor: "#ff0000",
+                        color: "#ff0000",
+                        weight: 1,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    });
+                },
                 onEachFeature: function (feature, layer) {
-                    layer.bindPopup('Magnitude: ' + feature.properties.mag + '<br>Location: ' + feature.properties.place);
+                    const time = new Date(feature.properties.time).toLocaleString();
+                    layer.bindPopup(`<b>Earthquake</b><br>Magnitude: ${feature.properties.mag}<br>Location: ${feature.properties.place}<br>Time: ${time}`);
                 }
             }).addTo(map);
 
@@ -314,7 +325,7 @@
                 .then(data => earthquakeLayer.addData(data));
 
             const floodLayer = L.tileLayer.wms('https://floodmap.modaps.eosdis.nasa.gov/arcgis/services/NRT_Flood/MapServer/WMSServer', {
-                layers: '1',
+                layers: 'Flood',
                 format: 'image/png',
                 transparent: true,
                 attribution: 'Flood data from NASA Global Flood Monitoring System'
@@ -356,6 +367,14 @@
 
                     createChatroom(projectId);
                 }
+            });
+
+            floodLayer.on('click', function(e) {
+                const latlng = e.latlng;
+                L.popup()
+                    .setLatLng(latlng)
+                    .setContent("Flood detected at this location")
+                    .openOn(map);
             });
         }
 
