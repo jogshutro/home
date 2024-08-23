@@ -245,6 +245,7 @@
             <option value="robbery_prevention">Robbery Prevention</option>
             <option value="extortion_prevention">Extortion Prevention</option>
             <option value="tree_plantation">Tree Plantation</option>
+            <option value="other">Other</option>
         </select>
         <textarea id="description" placeholder="Description"></textarea>
         <button type="submit">Submit</button>
@@ -287,16 +288,16 @@
         let isMarking = false;
         let currentMarkers = [];
         let markerCount = 0;
-        const maxMarkers = 3; 
+        const maxMarkers = 3;
         let userProjects = [];
         let activeChatroom = '';
         let lastMessageTime = 0;
         let markedLocation = null;
 
         function initMap() {
-            map = L.map('map').setView([23.8103, 90.4125], 13); 
+            map = L.map('map').setView([23.8103, 90.4125], 13);
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {   
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
             }).addTo(map);
 
@@ -307,8 +308,8 @@
                 attribution: 'Earthquake data from USGS'
             }).addTo(map);
 
-            // Add GFMS Flood layer
-            const floodLayer = L.tileLayer('https://floodservicemap.firebaseio.com/tile/{z}/{x}/{y}', {
+            // Add Flood data using appropriate open-source data
+            const floodLayer = L.tileLayer('https://floodmap.floodservicemap.org/tile/{z}/{x}/{y}', {
                 attribution: 'Flood data from GFMS'
             }).addTo(map);
 
@@ -317,14 +318,14 @@
                     alert("You must submit or delete your project before creating another one!");
                     return;
                 }
-                if (isMarking && markerCount < maxMarkers) {  
+                if (isMarking && markerCount < maxMarkers) {
                     const projectName = prompt("Enter project name:");
                     if (!projectName) return;
 
-                    const projectId = db.collection("projects").doc().id; 
+                    const projectId = db.collection("projects").doc().id;
                     document.getElementById('project-name').value = projectName;
                     const projectType = document.getElementById('project-type').value;
-                    const color = getProjectColor(projectType);  
+                    const color = getProjectColor(projectType);
 
                     const marker = L.circleMarker(e.latlng, {
                         color: color,
@@ -346,13 +347,13 @@
                         document.getElementById('mark-area-button').textContent = 'Mark Area';
                     }
 
-                    createChatroom(projectId);  
+                    createChatroom(projectId);
                 }
             });
         }
 
         function getProjectColor(type) {
-            switch (type) {  
+            switch (type) {
                 case 'disaster_response':
                     return '#df8142';
                 case 'cleanup':
@@ -365,12 +366,14 @@
                     return '#ffff00';
                 case 'tree_plantation':
                     return '#006400';
+                case 'other':
+                    return '#9063eb';
                 default:
                     return '#000000';
             }
         }
 
-        auth.onAuthStateChanged(user => { 
+        auth.onAuthStateChanged(user => {
             if (user) {
                 document.getElementById('login-button').style.display = 'none';
                 document.getElementById('account-buttons').style.display = 'block';
@@ -594,7 +597,7 @@
                     await db.collection("projects").doc(projectId).delete();
                     await rtdb.ref('chatrooms/' + projectId).remove();
                     alert('Project and associated chatroom deleted successfully!');
-                    location.reload(); // Refreshes the entire page after deletion
+                    location.reload();
                 } catch (error) {
                     console.error('Error deleting marker:', error);
                 }
@@ -625,7 +628,7 @@
                 return;
             }
 
-            const projectId = db.collection("projects").doc().id; // Generate a unique ID for each project
+            const projectId = db.collection("projects").doc().id;
 
             await db.collection("projects").doc(projectId).set({
                 name: projectName,
@@ -646,7 +649,7 @@
             alert('Project submitted successfully!');
 
             loadUserProjects();
-            loadMarkersFromFirestore(); // Reload markers to show the new one
+            loadMarkersFromFirestore();
         });
 
         async function deleteProjects(userId) {
@@ -657,7 +660,7 @@
                 rtdb.ref('chatrooms/' + doc.id).remove();
             });
             await batch.commit();
-            location.reload(); // Refreshes the entire page after deletion
+            location.reload();
         }
 
         window.onload = initMap;
@@ -665,7 +668,7 @@
 
     <!-- Watermark -->
     <!-- Ashfaqul Alam -->
-    <!-- Disclaimer: now I initially coded it in replit and since I figured I was going to host it on github pages, I thought it was essential to keep it as efficient as possible due to the limitations of free hosting. Hence, the code was partially inhanced using the A.I. code auto completion/suggestion tool that comes with replit for free-->
+    <!-- Disclaimer: now I initially coded it in replit and since I figured I was going to host it on github pages, I thought it was essential to keep it as efficient as possible due to the limitations of free hosting. Hence, the code was partially enhanced using the A.I. code auto-completion/suggestion tool that comes with replit for free-->
 
     <!-- Creator Info -->
     <div id="contact-info">
