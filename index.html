@@ -303,47 +303,29 @@
 
             loadMarkersFromFirestore();
 
-            const earthquakeLayer = L.geoJSON(null, {
-                pointToLayer: function (feature, latlng) {
-                    return L.circleMarker(latlng, {
-                        radius: 8,
-                        fillColor: "#ff0000",
-                        color: "#ff0000",
-                        weight: 1,
-                        opacity: 1,
-                        fillOpacity: 0.8
-                    });
-                },
-                onEachFeature: function (feature, layer) {
-                    const time = new Date(feature.properties.time).toLocaleString();
-                    layer.bindPopup(`<b>Earthquake</b><br>Magnitude: ${feature.properties.mag}<br>Location: ${feature.properties.place}<br>Time: ${time}`);
-                }
-            }).addTo(map);
-
-            fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson')
-                .then(response => response.json())
-                .then(data => earthquakeLayer.addData(data));
-
-            const floodLayer = L.tileLayer.wms('https://floodmap.modaps.eosdis.nasa.gov/arcgis/services/NRT_Flood/MapServer/WMSServer', {
-                layers: '0',
+            const disasterLayer = L.tileLayer.wms('https://geoserver.gdacs.org/geoserver/GDACS/wms', {
+                layers: 'gdacs:gdacs_alerts',
                 format: 'image/png',
                 transparent: true,
-                attribution: 'Flood data from NASA Global Flood Monitoring System'
+                attribution: 'Global Disaster Alert and Coordination System (GDACS)'
             }).addTo(map);
 
-            const floodGeoJsonUrl = 'https://floodmap.modaps.eosdis.nasa.gov/arcgis/services/NRT_Flood/MapServer/1/query?f=geojson&where=1=1';
+            fetch('https://geoserver.gdacs.org/geoserver/gdacs/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=gdacs:gdacs_alerts&outputFormat=application/json')
+                .then(response => response.json())
+                .then(data => {
+                    L.geoJSON(data, {
+                        onEachFeature: function (feature, layer) {
+                            const { title, country, type, severity, deaths } = feature.properties;
+                            layer.bindPopup(
+                                `<b>${title}</b><br>Type: ${type}<br>Country: ${country}<br>Severity: ${severity}<br>Deaths: ${deaths}`
+                            );
+                        }
+                    }).addTo(map);
+                });
 
-           fetch(floodGeoJsonUrl)
-           .then(response => response.json())
-           .then(data => {
-           L.geoJSON(data, {
-           style: { color: "#00008B", weight: 2, fillOpacity: 0.5 },
-            onEachFeature: function (feature, layer) {
-                const time = new Date(feature.properties.Time).toLocaleString();
-                layer.bindPopup(`<b>Flood Alert</b><br>Location: ${feature.properties.Location}<br>Time: ${time}`);
-                 }
-           }).addTo(map);
-        });
+            const layersControl = L.control.layers(null, {
+                "Disaster Layer": disasterLayer
+            }).addTo(map);
 
             map.on('click', (e) => {
                 if (markerCount > 0) {
@@ -381,14 +363,6 @@
 
                     createChatroom(projectId);
                 }
-            });
-
-            floodLayer.on('click', function(e) {
-    const latlng = e.latlng;
-    L.popup()
-        .setLatLng(latlng)
-        .setContent("Flood detected at this location")
-        .openOn(map);
             });
         }
 
@@ -548,7 +522,7 @@
             chatroomRef.on('value', async (snapshot) => {
                 const projectDoc = await db.collection("projects").doc(activeChatroom).get();
                 if (!projectDoc.exists) {
-                    alert("This project doesn't exist anymore/ will exist after it's submitted.");
+                    alert("This project doesn't exist anymore or will exist after it's submitted.");
                     document.getElementById('chatroom-container').style.display = 'none';
                     return;
                 }
@@ -573,7 +547,7 @@
 
             const projectDoc = await db.collection("projects").doc(activeChatroom).get();
             if (!projectDoc.exists) {
-                alert("This project doesn't exist anymore/ will exist after it's submitted.");
+                alert("This project doesn't exist anymore or will exist after it's submitted.");
                 document.getElementById('chatroom-container').style.display = 'none';
                 return;
             }
@@ -705,10 +679,7 @@
 
         window.onload = initMap;
     </script>
-     <!-- Watermark -->
-    <!-- Ashfaqul Alam -->
-    <!-- Disclaimer: now I initially coded it in replit and since I figured I was going to host it on github pages, I thought it was essential to keep it as efficient as possible due to the limitations of free hosting. Hence, the code was partially inhanced using the A.I. code auto completion/suggestion tool that comes with replit for free-->
-    <!-- Creator Info -->
+
     <div id="contact-info">
         This website was created by <a href="https://www.facebook.com/profile.php?id=100016903667257&mibextid=ZbWKwL">Ashfaqul Alam</a> to serve our broader social interest | Email: kittlerthebittler@gmail.com
     </div>
